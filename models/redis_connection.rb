@@ -1,6 +1,5 @@
 require "json"
 require "active_support/core_ext/hash"
-require "redis/connection/hiredis"
 require "redis"
 
 REDIS_CONFIG_PATH = File.expand_path("../../config/redis.json", __FILE__)

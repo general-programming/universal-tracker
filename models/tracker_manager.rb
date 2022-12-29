@@ -77,6 +77,7 @@ module UniversalTracker
     
     def get_warrior_projects
       doc = JSON.parse(@warrior_redis.get("warriorhq:projects_json") || "null")
+
       return JSON.pretty_generate(doc)
     end
 

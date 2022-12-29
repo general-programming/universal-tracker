@@ -7,10 +7,10 @@ module UniversalTracker
   class Tracker
     module Statistics
       def queues
-        resp = redis.pipelined do
-          redis.keys("#{ prefix }todo:d:*")
-          redis.scard("#{ prefix }todo")
-          redis.scard("#{ prefix }todo:secondary")
+        resp = redis.pipelined do |pipeline|
+          pipeline.keys("#{ prefix }todo:d:*")
+          pipeline.scard("#{ prefix }todo")
+          pipeline.scard("#{ prefix }todo:secondary")
         end
         
         queues = []
@@ -20,9 +20,9 @@ module UniversalTracker
 
         if resp[0].size > 0
           keys = resp[0].sort
-          resp = redis.pipelined do
+          resp = redis.pipelined do |pipeline|
             keys.each do |queue|
-              redis.scard(queue)
+              pipeline.scard(queue)
             end
           end.each_with_index do |length, index|
             if keys[index]=~/^#{ prefix }todo:d:(.+)$/
@@ -38,9 +38,9 @@ module UniversalTracker
 
       def requests_per_minute_history
         minutes = redis.keys("#{ prefix }requests_processed:*")
-        replies = redis.pipelined do
+        replies = redis.pipelined do |pipeline|
           minutes.each do |key|
-            redis.get(key)
+            pipeline.get(key)
           end
         end
         minutes.zip(replies || []).map do |minute, requests|
@@ -52,9 +52,9 @@ module UniversalTracker
 
       def requests_granted_per_minute_history
         minutes = redis.keys("#{ prefix }requests_granted:*")
-        replies = redis.pipelined do
+        replies = redis.pipelined do |pipeline|
           minutes.each do |key|
-            redis.get(key)
+            pipeline.get(key)
           end
         end
         minutes.zip(replies || []).map do |minute, requests|
@@ -72,7 +72,7 @@ module UniversalTracker
         claims = redis.hgetall("#{ prefix }claims")
         out = redis.zrange("#{ prefix }out", 0, -1, :with_scores=>true)
         claims_per_downloader = ActiveSupport::OrderedHash.new{ |h,k| h[k] = [] }
-        out.each_slice(2) do |item, time|
+        out.each do |item, time|
           if claims[item]
             ip, downloader = claims[item].split(" ", 2)
           else
@@ -96,10 +96,10 @@ module UniversalTracker
       end
 
       def downloader_update_status
-        resp = redis.pipelined do
-          redis.hgetall("#{ prefix }downloader_version")
-          redis.get("#{ prefix }current_version")
-          redis.get("#{ prefix }current_version_update_message")
+        resp = redis.pipelined do |pipeline|
+          pipeline.hgetall("#{ prefix }downloader_version")
+          pipeline.get("#{ prefix }current_version")
+          pipeline.get("#{ prefix }current_version_update_message")
         end
         data = {
           "downloader_version"=>Hash[*(resp[0] || [])],
@@ -120,11 +120,11 @@ module UniversalTracker
 
       def charts
         # chart data
-        resp = redis.pipelined do
-          redis.hkeys("#{ prefix }downloader_bytes")     # 0
-          redis.get("#{ prefix }chart:total_items")      # 1
-          redis.get("#{ prefix }chart:total_bytes")      # 2
-          redis.lrange("#{ prefix }chart:previous_chart_data_urls", 0, -1)   # 3
+        resp = redis.pipelined do |pipeline|
+          pipeline.hkeys("#{ prefix }downloader_bytes")     # 0
+          pipeline.get("#{ prefix }chart:total_items")      # 1
+          pipeline.get("#{ prefix }chart:total_bytes")      # 2
+          pipeline.lrange("#{ prefix }chart:previous_chart_data_urls", 0, -1)   # 3
         end
 
         downloaders = resp[0]
@@ -135,9 +135,9 @@ module UniversalTracker
         downloader_chart_fields = downloaders.map{|d|"#{ prefix }chart:downloader_bytes:#{ d }"}
 
         unless downloader_chart_fields.empty?
-          resp = redis.pipelined do
+          resp = redis.pipelined do |pipeline|
             downloader_chart_fields.each do |fieldname|
-              redis.get(fieldname)
+              pipeline.get(fieldname)
             end
           end.map do |list|
             process_chart_data(list)
@@ -160,20 +160,20 @@ module UniversalTracker
         downloaders = redis.hkeys("#{ prefix }downloader_bytes")
         downloader_chart_fields = downloaders.map{|d|"#{ prefix }chart:downloader_bytes:#{ d }"}
 
-        redis.multi do
-          redis.renamenx("#{ prefix }chart:total_items", "#{ prefix }chart:total_items:archive")
-          redis.renamenx("#{ prefix }chart:total_bytes", "#{ prefix }chart:total_bytes:archive")
+        redis.multi do |transaction|
+          transaction.renamenx("#{ prefix }chart:total_items", "#{ prefix }chart:total_items:archive")
+          transaction.renamenx("#{ prefix }chart:total_bytes", "#{ prefix }chart:total_bytes:archive")
           downloader_chart_fields.each do |fieldname|
-            redis.renamenx(fieldname, fieldname+":archive")
+            transaction.renamenx(fieldname, fieldname+":archive")
           end
         end
 
         timestamp = Time.now.utc.xmlschema
 
         # chart data
-        resp = redis.pipelined do
-          redis.get("#{ prefix }chart:total_items:archive")      # 0
-          redis.get("#{ prefix }chart:total_bytes:archive")      # 1
+        resp = redis.pipelined do |pipeline|
+          pipeline.get("#{ prefix }chart:total_items:archive")      # 0
+          pipeline.get("#{ prefix }chart:total_bytes:archive")      # 1
         end
 
         items_done_chart = process_chart_data(resp[0])
@@ -182,9 +182,9 @@ module UniversalTracker
         downloader_chart_fields = downloaders.map{|d|"#{ prefix }chart:downloader_bytes:#{ d }:archive"}
 
         unless downloader_chart_fields.empty?
-          resp = redis.pipelined do
+          resp = redis.pipelined do |pipeline|
             downloader_chart_fields.each do |fieldname|
-              redis.get(fieldname)
+              pipeline.get(fieldname)
             end
           end.map do |list|
             process_chart_data(list)
@@ -209,30 +209,30 @@ module UniversalTracker
 
         redis.lpush("#{ prefix }chart:previous_chart_data_urls", "/charts-archive/#{ prefix }#{ timestamp }.json")
 
-        redis.multi do
-          redis.del("#{ prefix }chart:total_items", "#{ prefix }chart:total_items:archive")
-          redis.del("#{ prefix }chart:total_bytes", "#{ prefix }chart:total_bytes:archive")
+        redis.multi do |transaction|
+          transaction.del("#{ prefix }chart:total_items", "#{ prefix }chart:total_items:archive")
+          transaction.del("#{ prefix }chart:total_bytes", "#{ prefix }chart:total_bytes:archive")
           downloader_chart_fields.each do |fieldname|
-            redis.del(fieldname, fieldname+":archive")
+            transaction.del(fieldname, fieldname+":archive")
           end
         end
       end
 
       def stats
         # simple statistics
-        resp = redis.pipelined do
-          redis.hgetall("#{ prefix }domain_bytes")       # 0
-          redis.hgetall("#{ prefix }downloader_bytes")   # 1
-          redis.hgetall("#{ prefix }downloader_count")   # 2
-          redis.get("#{ prefix }done_counter")           # 3
-          redis.scard("#{ prefix }todo")                 # 4
-          redis.scard("#{ prefix }todo:secondary")       # 5
-          redis.zcard("#{ prefix }out")                  # 6
+        resp = redis.pipelined do |pipeline|
+          pipeline.hgetall("#{ prefix }domain_bytes")       # 0
+          pipeline.hgetall("#{ prefix }downloader_bytes")   # 1
+          pipeline.hgetall("#{ prefix }downloader_count")   # 2
+          pipeline.get("#{ prefix }done_counter")           # 3
+          pipeline.scard("#{ prefix }todo")                 # 4
+          pipeline.scard("#{ prefix }todo:secondary")       # 5
+          pipeline.zcard("#{ prefix }out")                  # 6
         end
 
-        domain_bytes = Hash[*resp[0]]
-        downloader_bytes = Hash[*resp[1]]
-        downloader_count = Hash[*resp[2]]
+        domain_bytes = resp[0]
+        downloader_bytes = resp[1]
+        downloader_count = resp[2]
         total_items_done = resp[3].to_i
         total_items_todo = resp[4].to_i + resp[5].to_i
         total_items_out = resp[6].to_i
@@ -265,9 +265,9 @@ module UniversalTracker
 
       def logs
         log_keys = ["#{ prefix }log"] + redis.keys("#{ prefix }log:*")
-        replies = redis.pipelined do
+        replies = redis.pipelined do |pipeline|
           log_keys.each do |log_key|
-            redis.llen(log_key)
+            pipeline.llen(log_key)
           end
         end
         Hash[log_keys.map{|key|key[prefix.size,1000]}.zip(replies)]

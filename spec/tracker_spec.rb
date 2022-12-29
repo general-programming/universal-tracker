@@ -15,8 +15,8 @@ module UniversalTracker
     end
 
     it "should return a random item" do
-      @tracker.add_items(["abc"])
-      @tracker.random_item.should == "abc"
+      @tracker.add_items(["abc_random"])
+      @tracker.random_item.should == "abc_random"
     end
 
     it "should block ips" do
