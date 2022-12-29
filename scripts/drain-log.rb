@@ -16,9 +16,9 @@ $redis = UniversalTracker::RedisConnection.connection
 tracker = UniversalTracker::Tracker.new($redis)
 
 loop do
-  resp = $redis.pipelined do
+  resp = $redis.pipelined do |pipeline|
     1000.times do |i|
-      $redis.lpop("log")
+      pipeline.lpop("log")
     end
   end.compact
   puts resp
