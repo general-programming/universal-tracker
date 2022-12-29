@@ -5,3 +5,4 @@ config/redis.json
 *~
 node_modules/
 environment.json
+coverage/

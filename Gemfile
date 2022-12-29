@@ -16,5 +16,6 @@ group :development do
   gem "rspec"
   gem 'rubocop'
   gem "shotgun"
+  gem 'simplecov'
 end
 
