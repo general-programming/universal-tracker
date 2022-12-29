@@ -1,7 +1,7 @@
 require 'spec_helper'
 
 describe UploadTargets do
-  let(:tracker) { stub(:redis => $redis, :prefix => 'test-project:') }
+  let(:tracker) { double(:redis => $redis, :prefix => 'test-project:') }
   let(:targets) { UploadTargets.new(tracker) }
 
   before do

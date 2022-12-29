@@ -10,10 +10,10 @@ gem "redis", "~> 5.0.5"
 gem "bcrypt"
 
 group :development do
-  gem "cucumber", "~> 2.99"
+  gem "cucumber", "~> 2"
   gem "rack-test"
-  gem "rake", "~> 0.9"
-  gem "rspec", "~> 2.14"
+  gem "rake"
+  gem "rspec"
   gem 'rubocop'
   gem "shotgun"
 end
